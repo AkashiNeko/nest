@@ -1,2 +1,3 @@
 # nest
-An efficient C++17 networking library
+
+An efficient **C++17** networking library for **Linux**.
