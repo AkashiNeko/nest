@@ -29,21 +29,22 @@ using poller_t = int;
 
 class EventDispatcher {
 public:
-    using Handler = std::function<void(socket_t, void*)>;
-
     virtual ~EventDispatcher() = default;
 
-    virtual bool add_event(socket_t sock, void* userdata, Handler handler) = 0;
+    virtual bool add_event(socket_t sock,
+                           void* userdata,
+                           const std::function<void(socket_t, void*)> handler) = 0;
 
-    virtual bool remove_event(socket_t sock, std::function<void(void*)> handler) = 0;
+    virtual bool remove_event(socket_t sock,
+                              const std::function<void(void*)>& handler) = 0;
 
     virtual void wait(int /* milliseconds */ timeout = -1) = 0;
 
 protected:
     struct EventData {
-        socket_t     socket;
+        socket_t socket;
         void* userdata;
-        Handler      handler;
+        std::function<void(socket_t, void*)> handler;
     }; // struct EventData
 
     std::unordered_map<socket_t, std::shared_ptr<EventData>> map_;
