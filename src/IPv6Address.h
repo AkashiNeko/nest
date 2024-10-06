@@ -22,13 +22,11 @@ public:
     inline explicit IPv6Address(const char* addr)
         : IPv6Address(std::string_view(addr)) {}
 
-    inline bool isValid() const override { return valid_; }
-
+    inline bool is_valid() const override { return valid_; }
     inline Family family() const override { return Family::IPV6; }
+    inline const in6_addr& raw_in6addr() const { return address_; }
 
-    inline const in6_addr& raw_in6_addr() const { return address_; }
-
-    std::string toString() const override;
+    std::string to_string() const override;
 
 private:
     struct in6_addr address_;

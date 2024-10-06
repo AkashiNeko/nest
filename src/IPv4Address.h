@@ -23,13 +23,11 @@ public:
     inline explicit IPv4Address(const char* addr)
         : IPv4Address(std::string_view(addr)) {}
 
-    inline bool isValid() const override { return valid_; }
-
+    inline bool is_valid() const override { return valid_; }
     inline Family family() const override { return Family::IPV4; }
+    inline const in_addr& raw_inaddr() const { return address_; }
 
-    inline const in_addr& raw_in_addr() const { return address_; }
-
-    std::string toString() const override;
+    std::string to_string() const override;
 
 private:
     struct in_addr address_;

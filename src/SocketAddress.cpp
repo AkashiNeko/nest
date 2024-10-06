@@ -6,7 +6,7 @@
 
 namespace nest {
 
-SocketAddress::SocketAddress(const IPAddress& addr, Port port)
+SocketAddress::SocketAddress(const IPAddress& addr, port_t port)
     : address_(nullptr), port_(port) {
 
     if (addr.family() == IPV4) {
@@ -20,12 +20,12 @@ SocketAddress::~SocketAddress() {
     if (address_) delete address_;
 }
 
-std::string SocketAddress::toString() const {
-    if (!address_->isValid()) return {};
+std::string SocketAddress::to_string() const {
+    if (!address_->is_valid()) return {};
     if (address_->family() == IPV4) {
-        return address_->toString() + ':' + std::to_string(port_);
+        return address_->to_string() + ':' + std::to_string(port_);
     } else {
-        return '[' + address_->toString() + ']' + ':' + std::to_string(port_);
+        return '[' + address_->to_string() + ']' + ':' + std::to_string(port_);
     }
 }
 

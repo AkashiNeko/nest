@@ -12,7 +12,7 @@
 
 namespace nest::utils {
 
-std::pair<sockaddr*, socklen_t> make_sockaddr(const IPAddress& address, Port port);
+std::pair<sockaddr*, socklen_t> make_sockaddr(const IPAddress& address, port_t port);
 
 } // namespace nest::utils
 

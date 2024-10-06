@@ -2,6 +2,7 @@
 
 #include "IPAddress.h"
 #include "Socket.h"
+#include "error.h"
 #include "utils.h"
 
 #ifdef __linux__
@@ -10,52 +11,92 @@
 
 namespace nest {
 
-TcpSocket::TcpSocket(Family family) {
-    if (family == IPV4) {
-        socket_ = socket(AF_INET, SOCK_STREAM, 0);
-    } else /* if (family == IPV6) */ {
-        socket_ = socket(AF_INET6, SOCK_STREAM, 0);
-    }
+namespace {
+
+inline socket_t make_socket(Family family) {
+    return ::socket((family == IPV4) ? AF_INET : AF_INET6, SOCK_STREAM, 0);
 }
 
-TcpSocket::TcpSocket(const IPAddress& address, Port port)
-    : TcpSocket(address.family()) {
-
-    this->bind(address, port);
-}
+} // anonymous namespace
 
 TcpSocket::TcpSocket(socket_t sock) {
     socket_ = sock;
 }
 
-TcpSocket::~TcpSocket() {
-    this->close();
-}
+bool TcpSocket::connect(const IPAddress& address, port_t port) {
+    if (socket_ == INVALID_SOCKET) {
+        socket_ = make_socket(address.family());
+        if (socket_ == INVALID_SOCKET) {
+            errno_ = net_error_code();
+            return false;
+        }
+    }
 
-bool TcpSocket::bind(const IPAddress& address, Port port) {
-    if (socket_ == INVALID_SOCKET) return false;
     auto [sa, len] = utils::make_sockaddr(address, port);
-    return 0 == ::bind(socket_, sa, len);
+
+    if (0 == ::connect(socket_, sa, len)) {
+        errno_ = SUCCESS;
+        return true;
+    } else {
+        errno_ = net_error_code();
+        return false;
+    }
 }
 
-bool TcpSocket::connect(const IPAddress& address, Port port) {
-    if (socket_ == INVALID_SOCKET) return false;
+bool TcpSocket::bind(const IPAddress& address, port_t port) {
+    if (socket_ == INVALID_SOCKET) {
+        socket_ = make_socket(address.family());
+        if (socket_ == INVALID_SOCKET) {
+            errno_ = net_error_code();
+            return false;
+        }
+    }
+
+    int opt = 1;
+    setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     auto [sa, len] = utils::make_sockaddr(address, port);
-    return 0 == ::connect(socket_, sa, len);
+
+    if (0 == ::bind(socket_, sa, len)) {
+        errno_ = SUCCESS;
+        return true;
+    } else {
+        errno_ = net_error_code();
+        return false;
+    }
 }
 
-bool TcpSocket::listen() {
-    return 0 == ::listen(socket_, 20);
+int TcpSocket::read(char* buffer, std::size_t size) const {
+    int res = ::recv(socket_, buffer, size, 0);
+    errno_ = (res == -1) ? net_error_code() : SUCCESS;
+    return res;
+}
+
+int TcpSocket::write(const char* buffer, std::size_t size) const {
+    int res = ::send(socket_, buffer, size, 0);
+    errno_ = (res == -1) ? net_error_code() : SUCCESS;
+    return res;
+}
+
+bool TcpSocket::listen(const IPAddress& address, port_t port) {
+    if (!this->bind(address, port)) return false;
+    if (0 == ::listen(socket_, 20)) {
+        errno_ = SUCCESS;
+        return true;
+    } else {
+        errno_ = net_error_code();
+        return false;
+    }
 }
 
 TcpSocket TcpSocket::accept() const {
-    return TcpSocket{::accept(socket_, nullptr, nullptr)};
-}
-
-void TcpSocket::close() {
-    if (socket_ != INVALID_SOCKET) {
-        ::close(socket_);
-        socket_ = INVALID_SOCKET;
+    socket_t sock = ::accept(socket_, nullptr, nullptr);
+    if (sock != INVALID_SOCKET) {
+        errno_ = SUCCESS;
+        return TcpSocket{sock};
+    } else {
+        errno_ = net_error_code();
+        return TcpSocket{INVALID_SOCKET};
     }
 }
 

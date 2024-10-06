@@ -9,24 +9,17 @@ namespace nest {
 
 class TcpSocket : public Socket {
 public:
-    explicit TcpSocket(Family family = IPV4);
-
-    explicit TcpSocket(const IPAddress& address, Port port = 0U);
-
-    ~TcpSocket() override;
-
-    bool bind(const IPAddress& address, Port port = 0U) override;
-
-    bool connect(const IPAddress& address, Port port = 0U) override;
-
-    bool listen();
-
-    TcpSocket accept() const;
-
-    void close() override;
-
-private:
+    explicit TcpSocket() = default;
     explicit TcpSocket(socket_t sock);
+    ~TcpSocket() = default;
+
+    bool connect(const IPAddress& address, port_t port = 0U);
+
+    bool bind(const IPAddress& address, port_t port = 0U) override;
+    int read(char* buffer, std::size_t size) const override;
+    int write(const char* buffer, std::size_t size) const override;
+    bool listen(const IPAddress& address, port_t port);
+    TcpSocket accept() const;
 
 }; // class TcpSocket
 

@@ -12,9 +12,9 @@ enum Family : bool { IPV4, IPV6 };
 class IPAddress {
 public:
     virtual ~IPAddress() = default;
-    virtual bool isValid() const = 0;
+    virtual bool is_valid() const = 0;
     virtual Family family() const = 0;
-    virtual std::string toString() const = 0;
+    virtual std::string to_string() const = 0;
 
 protected:
     bool valid_ = false;
