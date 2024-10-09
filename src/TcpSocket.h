@@ -10,16 +10,18 @@ namespace nest {
 class TcpSocket : public Socket {
 public:
     explicit TcpSocket() = default;
-    explicit TcpSocket(socket_t sock);
     ~TcpSocket() = default;
 
-    bool connect(const IPAddress& address, port_t port = 0U);
+    explicit TcpSocket(socket_t sock) : Socket(sock) {}
 
-    bool bind(const IPAddress& address, port_t port = 0U) override;
-    int read(char* buffer, std::size_t size) const override;
-    int write(const char* buffer, std::size_t size) const override;
-    bool listen(const IPAddress& address, port_t port);
-    TcpSocket accept() const;
+    Result<bool> connect(const IPAddress& address, port_t port = 0U);
+    Result<bool> listen(const IPAddress& address, port_t port);
+    Result<TcpSocket> accept() const;
+
+    Result<bool> bind(const IPAddress& address, port_t port = 0U) override;
+    Result<int> read(char* buffer, std::size_t size) const override;
+    Result<int> write(const char* buffer, std::size_t size) const override;
+
 
 }; // class TcpSocket
 

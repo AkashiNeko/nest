@@ -10,7 +10,7 @@
 #include "IPAddress.h"
 #include "Port.h"
 
-namespace nest::utils {
+namespace nest {
 
 std::pair<sockaddr*, socklen_t> make_sockaddr(const IPAddress& address, port_t port);
 

@@ -5,6 +5,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <utility>
 
 namespace nest {
 
@@ -22,6 +23,19 @@ inline const char* net_error_str(error_t code = errno) {
 #endif
 }
 
-}
+template <typename T>
+struct Result {
+public:
+    Result(T&& v, error_t e = 0)
+        : value(std::move(v)), error(e) {}
+
+    Result(const T& v, error_t e = 0)
+        : value(v), error(e) {}
+
+    T value;
+    error_t error;
+}; // struct Result
+
+} // namespace nest
 
 #endif // NEST_ERROR_H

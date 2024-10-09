@@ -28,35 +28,27 @@ public:
     explicit Socket() = default;
     virtual ~Socket() = default;
 
-    Socket(const Socket&) = delete;
-    Socket& operator=(const Socket&) = delete;
+    explicit Socket(socket_t sock) : socket_(sock) {}
 
-    explicit Socket(Socket&&);
+    Socket(const Socket&) = default;
+    Socket(Socket&&) = default;
+
+    Socket& operator=(const Socket&);
     Socket& operator=(Socket&&);
 
     inline bool is_open() const { return socket_ != INVALID_SOCKET; }
-    inline int error() const { return errno_; }
-    inline const char* str_error() const { return net_error_str(errno_); }
     inline socket_t raw_socket() const { return socket_; }
-
-    virtual bool bind(const IPAddress& address, port_t port) = 0;
-    virtual int read(char* buffer, std::size_t size) const = 0;
-    virtual int write(const char* buffer, std::size_t size) const = 0;
 
     void nonblock(bool value = true);
 
-    void close();
+    virtual Result<bool> bind(const IPAddress& address, port_t port) = 0;
+    virtual Result<int> read(char* buffer, std::size_t size) const = 0;
+    virtual Result<int> write(const char* buffer, std::size_t size) const = 0;
 
-    inline void before_close(std::function<void()> handler) {
-        on_before_close_ = handler;
-    }
+    virtual void close();
 
 protected:
     socket_t socket_ = INVALID_SOCKET;
-    mutable error_t errno_ = SUCCESS;
-
-private:
-    std::function<void()> on_before_close_;
 
 };
 

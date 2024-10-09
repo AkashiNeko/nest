@@ -3,7 +3,7 @@
 #include "IPv4Address.h"
 #include "IPv6Address.h"
 
-namespace nest::utils {
+namespace nest {
 
 std::pair<sockaddr*, socklen_t> make_sockaddr(const IPAddress& address, port_t port) {
     static thread_local sockaddr_in in = { .sin_family = AF_INET };
