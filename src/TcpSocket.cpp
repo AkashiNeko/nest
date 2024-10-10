@@ -46,6 +46,7 @@ Result<bool> TcpSocket::bind(const IPAddress& address, port_t port) {
 
     const int opt = 1;
     setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(socket_, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
 
     const auto [sa, len] = make_sockaddr(address, port);
 

@@ -15,11 +15,11 @@ public:
 
     ~EpollPoller() override;
 
-    bool add_event(socket_t sock) override;
+    bool add_event(socket_t sock, void* ptr) override;
 
     bool remove_event(socket_t sock) override;
 
-    bool wait(const std::function<void(socket_t)>& f, int timeout = -1) override;
+    bool wait(const std::function<void(void*)>& f, int timeout = -1) override;
 
 private:
     int epfd_;

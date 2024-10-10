@@ -23,29 +23,35 @@ using Poller = EpollPoller;
 namespace nest {
 
 template <class UserData>
-class TcpServer {
+class  TcpServer {
 private:
+    struct TcpServerData {
+        socket_t socket;
+        std::unique_ptr<UserData> userdata;
+        std::mutex mutex;
+    }; // struct TcpServer::TcpServerData
+
     friend class TcpSocketOverrideClose;
 
     class TcpSocketOverrideClose : public TcpSocket {
     public:
-        inline TcpSocketOverrideClose(socket_t raw, TcpServer* server)
-            : TcpSocket{raw}, server_(server) {}
+        inline TcpSocketOverrideClose(socket_t raw,
+                                      TcpServer* server,
+                                      TcpServerData* data)
+            : TcpSocket{raw}, server_(server), data_(data) {}
 
         void close() override {
-            server_->poller_->remove_event(socket_);
-            server_->map_.erase(socket_);
+            // Override the close function: When the user closes the socket, it
+            // automatically removes the socket from the poller and frees the data_.
+            server_->poller_->remove_event(data_->socket);
+            delete data_;
             TcpSocket::close();
         }
 
     private:
         TcpServer* server_;
+        TcpServerData* data_;
     }; // class TcpServer::TcpSocketOverrideClose
-
-    struct TcpServerData {
-        std::mutex mutex;
-        std::unique_ptr<UserData> userdata;
-    }; // struct TcpServer::TcpServerData
 
 public:
     explicit TcpServer() : poller_(new Poller) {}
@@ -63,70 +69,99 @@ public:
     }
 
     inline Result<bool> listen(const IPAddress& address, port_t port) {
-        return server_.listen(address, port);
+        auto res = server_.listen(address, port);
+        listen_ = res.value;
+        return res;
     }
 
-    bool run(std::size_t threads = 4) {
-        if (!server_.is_open()) return false;
+    void run(std::size_t threads = 4) {
+        if (!listen_) return;
         server_.nonblock();
-        poller_->add_event(server_.raw_socket());
+
+        // Add server socket to the poller
+        poller_->add_event(server_.raw_socket(), nullptr);
+
+        // Start thread pool
         tp_.run(threads);
 
-        bool result = false;
-        while (!stop_) result = poller_->wait(
-            [this](socket_t sock) {
-                if (sock == server_.raw_socket()) {
-                    on_server_event(sock);
-                } else if (const auto it = map_.find(sock);
-                           it != map_.end() && it->second->mutex.try_lock()) {
-                    on_connection_event(sock, it->second);
-                }
+        // Event loop
+        while (poller_->wait([this](void* ptr) {
+            auto data = reinterpret_cast<TcpServerData*>(ptr);
+            if (!ptr) {
+                on_server_event();
+            } else {
+                if (data->mutex.try_lock())
+                    on_connection_event(data);
             }
-        );
-        tp_.stop();
-        return result;
+        }));
     }
 
 private:
-    inline void on_connection_event(socket_t connfd, std::shared_ptr<TcpServerData> data) {
-        tp_.push([this, data, sock = TcpSocketOverrideClose(connfd, this)]() mutable {
+    inline void on_server_event() {
+        tp_.push([this]() {
+            TcpSocket server(this->server_.raw_socket());
+            while (true) {
+                TcpSocket socket = server.accept().value;
+                if (!socket.is_open()) return;
+                socket.nonblock();
+
+                TcpServerData* data = nullptr;
+                try {
+                    data = new TcpServerData {
+                        .socket = socket.raw_socket(),
+                        .userdata = std::make_unique<UserData>(),
+                    };
+                    if (on_open_) {
+                        // Execute `on_open` callback
+                        on_open_(socket, *data->userdata.get());
+                    }
+                } catch (...) {
+                    socket.close();
+                }
+                if (!socket.is_open()) return;
+                poller_->add_event(socket.raw_socket(), data);
+            }
+        });
+    }
+
+    inline void on_connection_event(TcpServerData* data) {
+        tp_.push([this, data]() {
+            TcpSocketOverrideClose sock(data->socket, this, data);
             char buf[4096];
             while (true) {
                 auto [res, err] = sock.read(buf, sizeof(buf));
                 if (res > 0) {
-                    if (static_cast<std::size_t>(res) != sizeof(buf))
+                    if (static_cast<std::size_t>(res) != sizeof(buf)) {
+                        // The buffer is not full
                         buf[res] = '\0';
-                    on_message_(sock, *data->userdata.get(),
-                        std::string_view(buf, res));
+                    }
+
+                    if (on_message_) {
+                        // Execute `on_message` callback
+                        on_message_(sock, *data->userdata.get(),
+                                    std::string_view(buf, res));
+                    }
+
+                    if (!sock.is_open()) {
+                        // The socket is closed by user
+                        return;
+                    }
+
                 } else {
+                    // sock.read return 0 | -1
                     if (err != EAGAIN) {
+                        // Delete data pointer while closing the socket
                         sock.close();
-                        on_close_(*data->userdata.get());
+                        if (on_close_) {
+                            // Execute `on_close` callback
+                            on_close_(*data->userdata.get());
+                        }
+                    } else {
+                        // EAGAIN: The socket is not closed, mutex should be unlocked
+                        data->mutex.unlock();
                     }
                     break;
                 }
-            }
-            data->mutex.unlock();
-        });
-    }
-
-    inline void on_server_event(socket_t servfd) {
-        tp_.push([this, servfd]() {
-            TcpSocket server(servfd);
-            while (true) {
-                socket_t raw = server.accept().value.raw_socket();
-                TcpSocketOverrideClose socket(raw, this);
-                if (!socket.is_open()) return;
-                socket.nonblock();
-
-                auto data = new TcpServerData {
-                    .userdata = std::make_unique<UserData>(),
-                };
-                map_.emplace(raw, data);
-
-                this->on_open_(socket, *data->userdata.get());
-
-                poller_->add_event(raw);
             }
         });
     }
@@ -140,9 +175,8 @@ private:
     std::function<void(TcpSocket&, UserData&, std::string_view)> on_message_;
     std::function<void(UserData&)> on_close_;
 
-    std::unordered_map<socket_t, std::shared_ptr<TcpServerData>> map_;
-
     bool stop_ = false;
+    bool listen_ = false;
 
 }; // class TcpServer
 

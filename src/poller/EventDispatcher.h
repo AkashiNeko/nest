@@ -4,7 +4,6 @@
 #define EVENT_DISPATCHER_H
 
 #include "Socket.h"
-#include <memory>
 
 namespace nest {
 
@@ -31,11 +30,11 @@ class EventDispatcher {
 public:
     virtual ~EventDispatcher() = default;
 
-    virtual bool add_event(socket_t sock) = 0;
+    virtual bool add_event(socket_t sock, void* ptr) = 0;
 
     virtual bool remove_event(socket_t sock) = 0;
 
-    virtual bool wait(const std::function<void(socket_t)>& f, int timeout = -1) = 0;
+    virtual bool wait(const std::function<void(void*)>& f, int timeout = -1) = 0;
 
 }; // class EventDispatcher
 
